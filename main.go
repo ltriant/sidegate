@@ -1,12 +1,14 @@
 package main
 
 import (
+	"flag"
 	"html/template"
 	"io"
 	"log"
 	"math"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 )
 
@@ -17,7 +19,7 @@ import (
 const TEMPLATE_INDEX string = `<!DOCTYPE html><html><head><title>SideGate</title></head><body><form action="/upload" method="POST" enctype="multipart/form-data"><div><input type="file" name="file"></div><div><input type="submit" value="Upload"></div></form></body></html>`
 const TEMPLATE_UPLOAD string = `<!DOCTYPE html><html><head><title>SideGate</title></head><body><p>Upload successful!</p></body></html>`
 
-const DEFAULT_LISTEN_ADDRESS string = ":8000"
+const DEFAULT_LISTEN_PORT int = 8000
 
 func uploadHandler(w http.ResponseWriter, r *http.Request, destinationDir string) {
 	r.ParseMultipartForm(math.MaxInt32)
@@ -62,30 +64,27 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
-	destinationDir, err := os.Getwd()
+	cwd, err := os.Getwd()
 
 	if err != nil {
 		log.Fatalf("Unable to get current working directory: %v", err)
 	}
 
-	if destDir, notEmpty := os.LookupEnv("DEST_DIR"); notEmpty {
-		destinationDir = destDir
-	}
+	destinationDir := flag.String("destDir", cwd, "destination folder")
+	listenPort := flag.Int("port", DEFAULT_LISTEN_PORT, "port to serve HTTP endpoint")
+	flag.Parse()
 
-	listenAddress := DEFAULT_LISTEN_ADDRESS
-	if listenPort, notEmpty := os.LookupEnv("LISTEN_PORT"); notEmpty {
-		var listenAddrStr strings.Builder
-		listenAddrStr.WriteString(":")
-		listenAddrStr.WriteString(listenPort)
-		listenAddress = listenAddrStr.String()
-	}
+	var listenAddrStr strings.Builder
+	listenAddrStr.WriteString(":")
+	listenAddrStr.WriteString(strconv.Itoa(*listenPort))
+	listenAddress := listenAddrStr.String()
 
 	http.HandleFunc("/", indexHandler)
 	http.HandleFunc("/upload", func(w http.ResponseWriter, r *http.Request) {
-		uploadHandler(w, r, destinationDir)
+		uploadHandler(w, r, *destinationDir)
 	})
 
-	log.Printf("Saving uploads to %s", destinationDir)
+	log.Printf("Saving uploads to %s", *destinationDir)
 	log.Printf("Listening on %s", listenAddress)
 
 	log.Fatal(http.ListenAndServe(listenAddress, nil))

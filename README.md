@@ -22,8 +22,8 @@ The [Go runtime](https://golang.org/) is necessary to build. There are no depend
 
 Get your local IP address (from `ifconfig` or whatever means you prefer), have the uploader browse to `http://1.2.3.4:8000` (where `1.2.3.4` is your IP address), and upload away.
 
-By default, files are dropped into the current working directory (i.e. whichever directory you ran the server from), but this can be overridden with the `DEST_DIR` environment variable.
+By default, files are dropped into the current working directory (i.e. whichever directory you ran the server from), but this can be overridden with the `-destDir` parameter.
 
-Also by default, the server listens on port 8000, but can be overridden by the `LISTEN_PORT` environment variable.
+Also by default, the server listens on port 8000, but can be overridden by the `-port` parameter.
 
-    $ LISTEN_PORT=1234 DEST_DIR=/tmp ./sidegate
+    $ ./sidegate -destDir /tmp -port 1234
