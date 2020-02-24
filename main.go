@@ -98,7 +98,7 @@ const TEMPLATE_UPLOAD string = `<!DOCTYPE html>
 const DEFAULT_LISTEN_PORT int = 8000
 
 func uploadHandler(w http.ResponseWriter, r *http.Request, destinationDir string) {
-	r.ParseMultipartForm(math.MaxInt32)
+	r.ParseMultipartForm(1024 * 1024 * 10)
 
 	fin, header, err := r.FormFile("file")
 	if err != nil {
