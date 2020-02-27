@@ -66,6 +66,20 @@ const TEMPLATE_INDEX string = `<!DOCTYPE html>
 
 const DEFAULT_LISTEN_PORT int = 8000
 
+var suffixes = []string{"bytes", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB"}
+
+// This was borrowed from https://stackoverflow.com/a/25613067
+func humanizeFileSize(size int64) string {
+	if size == 1 {
+		return "1 byte"
+	}
+
+	order := uint(math.Log2(float64(size)) / 10.0)
+	denom := 1 << (order * 10)
+	realSize := float32(size) / float32(denom)
+	return fmt.Sprintf("%0.1f %s", realSize, suffixes[order])
+}
+
 func uploadHandler(w http.ResponseWriter, r *http.Request, destinationDir string) {
 	r.ParseMultipartForm(1024 * 1024 * 10)
 
@@ -103,7 +117,7 @@ func uploadHandler(w http.ResponseWriter, r *http.Request, destinationDir string
 		return
 	}
 
-	log.Printf("File uploaded to: %s (%d bytes)", filePath, bytes)
+	log.Printf("File uploaded to: %s (%s)", filePath, humanizeFileSize(bytes))
 
 	http.Redirect(w, r, "/", http.StatusFound)
 }
@@ -117,20 +131,6 @@ type Node struct {
 type HomeDir struct {
 	ServePath string
 	Items     []Node
-}
-
-var suffixes = []string{"bytes", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB"}
-
-// This was borrowed from https://stackoverflow.com/a/25613067
-func humanizeFileSize(size int64) string {
-	if size == 1 {
-		return "1 byte"
-	}
-
-	order := uint(math.Log2(float64(size)) / 10.0)
-	denom := 1 << (order * 10)
-	realSize := float32(size) / float32(denom)
-	return fmt.Sprintf("%0.1f %s", realSize, suffixes[order])
 }
 
 func indexHandler(w http.ResponseWriter, r *http.Request, destDir string, t *template.Template) {
