@@ -143,7 +143,7 @@ func indexHandler(w http.ResponseWriter, r *http.Request, destDir string, t *tem
 
 	numObjects := len(dirObjects)
 	dirContents := make([]Node, numObjects)
-	for _, obj := range dirObjects {
+	for i, obj := range dirObjects {
 		var fileSize string
 		if obj.IsDir() {
 			fileSize = ""
@@ -151,11 +151,11 @@ func indexHandler(w http.ResponseWriter, r *http.Request, destDir string, t *tem
 			fileSize = humanizeFileSize(obj.Size())
 		}
 
-		dirContents = append(dirContents, Node{
+		dirContents[i] = Node{
 			Name:  obj.Name(),
 			Size:  fileSize,
 			IsDir: obj.IsDir(),
-		})
+		}
 	}
 
 	t.Execute(w, HomeDir{
