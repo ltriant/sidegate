@@ -4,7 +4,7 @@ Share files with friends :)
 
 # What does it do?
 
-1. Serves a directory, and any child directories below it
+1. Serves a directory, and any child directories below it, over HTTP
 2. Files can be downloaded from any of the served directories
 3. Files can be uploaded into any of the served directories
 
