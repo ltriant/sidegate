@@ -97,7 +97,7 @@ type SideGate struct {
 func NewSideGate(root string) (*SideGate, error) {
 	indexTemplate, err := template.New("index-page").Parse(TEMPLATE_INDEX)
 	if err != nil {
-		return nil, errors.New(fmt.Sprintf("Unable to build index page template: %v", err))
+		return nil, fmt.Errorf("Unable to build index page template: %w", err)
 	}
 
 	app := SideGate{
@@ -126,7 +126,7 @@ func (s SideGate) uploadHandler(w http.ResponseWriter, r *http.Request) {
 
 	fin, header, err := r.FormFile("file")
 	if err != nil {
-		log.Printf("Unable to get `file` parameter: %v", err)
+		log.Printf("Unable to get `file` parameter: %w", err)
 		http.Error(w, "Unable to get file data from request", http.StatusInternalServerError)
 		return
 	}
@@ -151,7 +151,7 @@ func (s SideGate) uploadHandler(w http.ResponseWriter, r *http.Request) {
 
 	fout, err := os.Create(filePath)
 	if err != nil {
-		log.Printf("Unable to create file %s: %v", filePath, err)
+		log.Printf("Unable to create file %s: %w", filePath, err)
 		http.Error(w, "Unable to create file on disk", http.StatusInternalServerError)
 		return
 	}
@@ -160,7 +160,7 @@ func (s SideGate) uploadHandler(w http.ResponseWriter, r *http.Request) {
 	// Stream file to disk
 	bytes, err := io.Copy(fout, fin)
 	if err != nil {
-		log.Printf("Failed to save file to path %s: %v", filePath, err)
+		log.Printf("Failed to save file to path %s: %w", filePath, err)
 		http.Error(w, "Unable to save file", http.StatusInternalServerError)
 		return
 	}
@@ -214,7 +214,7 @@ func (s SideGate) indexHandler(w http.ResponseWriter, r *http.Request) {
 
 	dirObjects, err := ioutil.ReadDir(fullPath.String())
 	if err != nil {
-		log.Printf("Unable to read contents of directory %s: %v", fullPath.String(), err)
+		log.Printf("Unable to read contents of directory %s: %w", fullPath.String(), err)
 		s.indexTemplate.Execute(w, nil)
 		return
 	}
@@ -267,7 +267,7 @@ func main() {
 	cwd, err := os.Getwd()
 
 	if err != nil {
-		log.Fatalf("Unable to get current working directory: %v", err)
+		log.Fatalf("Unable to get current working directory: %w", err)
 	}
 
 	destinationDir := flag.String("destDir", cwd, "destination folder")
@@ -281,7 +281,7 @@ func main() {
 
 	app, err := NewSideGate(*destinationDir)
 	if err != nil {
-		log.Fatalf("Unable to initialise: %v", err)
+		log.Fatalf("Unable to initialise: %w", err)
 	}
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
