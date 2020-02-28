@@ -1,7 +1,6 @@
 package main
 
 import (
-	"errors"
 	"flag"
 	"fmt"
 	"html/template"
@@ -90,11 +89,14 @@ type SideGate struct {
 	// Directory that will be served
 	Root string
 
+	// Port to listen on
+	Port int
+
 	// Template for the index page
 	indexTemplate *template.Template
 }
 
-func NewSideGate(root string) (*SideGate, error) {
+func NewSideGate(root string, listenPort int) (*SideGate, error) {
 	indexTemplate, err := template.New("index-page").Parse(TEMPLATE_INDEX)
 	if err != nil {
 		return nil, fmt.Errorf("Unable to build index page template: %w", err)
@@ -102,6 +104,7 @@ func NewSideGate(root string) (*SideGate, error) {
 
 	app := SideGate{
 		Root: root,
+		Port: listenPort,
 
 		indexTemplate: indexTemplate,
 	}
@@ -263,6 +266,31 @@ func (s SideGate) indexHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (s SideGate) OpenTheGate() error {
+	var listenAddrStr strings.Builder
+	listenAddrStr.WriteString(":")
+	listenAddrStr.WriteString(strconv.Itoa(s.Port))
+	listenAddress := listenAddrStr.String()
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/browse", http.StatusFound)
+	})
+	mux.HandleFunc("/browse/", s.indexHandler)
+	mux.HandleFunc("/upload/", s.uploadHandler)
+	mux.HandleFunc("/download/", s.downloadHandler)
+
+	server := http.Server{
+		Addr:    listenAddress,
+		Handler: mux,
+	}
+
+	log.Printf("Saving uploads to %s", s.Root)
+	log.Printf("Listening on %s", listenAddress)
+
+	return server.ListenAndServe()
+}
+
 func main() {
 	cwd, err := os.Getwd()
 
@@ -274,25 +302,10 @@ func main() {
 	listenPort := flag.Int("port", DEFAULT_LISTEN_PORT, "port to serve HTTP endpoint")
 	flag.Parse()
 
-	var listenAddrStr strings.Builder
-	listenAddrStr.WriteString(":")
-	listenAddrStr.WriteString(strconv.Itoa(*listenPort))
-	listenAddress := listenAddrStr.String()
-
-	app, err := NewSideGate(*destinationDir)
+	app, err := NewSideGate(*destinationDir, *listenPort)
 	if err != nil {
 		log.Fatalf("Unable to initialise: %w", err)
 	}
 
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		http.Redirect(w, r, "/browse", http.StatusFound)
-	})
-	http.HandleFunc("/browse/", app.indexHandler)
-	http.HandleFunc("/upload/", app.uploadHandler)
-	http.HandleFunc("/download/", app.downloadHandler)
-
-	log.Printf("Saving uploads to %s", app.Root)
-	log.Printf("Listening on %s", listenAddress)
-
-	log.Fatal(http.ListenAndServe(listenAddress, nil))
+	app.OpenTheGate()
 }
