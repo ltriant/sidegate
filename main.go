@@ -11,6 +11,7 @@ import (
 	"math"
 	"net/http"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -242,6 +243,18 @@ func (s SideGate) indexHandler(w http.ResponseWriter, r *http.Request) {
 			RelPath: fileRelPath.String(),
 		}
 	}
+
+	sort.Slice(dirContents, func(i, j int) bool {
+		if dirContents[i].IsDir && !dirContents[j].IsDir {
+			return true
+		}
+
+		if dirContents[i].IsDir && dirContents[j].IsDir {
+			return dirContents[i].Name < dirContents[j].Name
+		}
+
+		return false
+	})
 
 	s.indexTemplate.Execute(w, Directory{
 		CurrentPath: relPath,
