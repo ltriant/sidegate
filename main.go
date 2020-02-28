@@ -75,7 +75,9 @@ var suffixes = []string{"bytes", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB"}
 
 // This was borrowed from https://stackoverflow.com/a/25613067
 func humanizeFileSize(size int64) string {
-	if size == 1 {
+	if size == 0 {
+		return "0 bytes"
+	} else if size == 1 {
 		return "1 byte"
 	}
 
