@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"html/template"
@@ -13,6 +14,8 @@ import (
 	"strconv"
 	"strings"
 )
+
+const DEFAULT_LISTEN_PORT int = 8000
 
 // This is embedded because otherwise the binary needs to find template HTML
 // files at runtime, which I don't wanna mess around with for now. And other
@@ -33,19 +36,23 @@ const TEMPLATE_INDEX string = `<!DOCTYPE html>
 				padding: 0.5em 1em;
 			}
 			h1 { font-size: 14pt; font-weight: 700; }
-			h2 { font-size: 12pt; font-weight: 700; }
+			h2 { font-size: 12pt; font-weight: 700; font-family: monospace; }
 			th { font-weight: 700; text-align: left; }
 			td { padding-left: 5px; padding-right: 5px; font-family: monospace; }
+			a:link    { color: #67ce2c; }
+			a:visited { color: #67ce2c; }
+			a:hover   { color: #97ee4c; text-decoration: none; }
 		</style>
 	</head>
 	<body>
 		<h1>Upload a File</h1>
-		<form action="/upload" method="POST" enctype="multipart/form-data">
+		<form action="/upload/{{.CurrentPath}}" method="POST" enctype="multipart/form-data">
 			<div><input type="file" name="file"></div>
 			<div><input type="submit" value="Upload"></div>
 		</form>
 
-		<h2>{{.ServePath}}</h2>
+		<h2>{{range $folder := .PathParts}}{{$folder}} > {{end}}</h2>
+
 		<table>
 			{{range $item := .Items}}
 			<tr>
@@ -53,9 +60,9 @@ const TEMPLATE_INDEX string = `<!DOCTYPE html>
 
 				<td>
 				{{if $item.IsDir}}
-				{{$item.Name}}/
+				<a href="/browse/{{$item.RelPath}}">{{$item.Name}}/</a>
 				{{else}}
-				{{$item.Name}}
+				<a href="/download/{{$item.RelPath}}">{{$item.Name}}</a>
 				{{end}}
 				</td>
 			</tr>
@@ -63,8 +70,6 @@ const TEMPLATE_INDEX string = `<!DOCTYPE html>
 		</table>
 	</body>
 </html>`
-
-const DEFAULT_LISTEN_PORT int = 8000
 
 var suffixes = []string{"bytes", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB"}
 
@@ -80,7 +85,42 @@ func humanizeFileSize(size int64) string {
 	return fmt.Sprintf("%0.1f %s", realSize, suffixes[order])
 }
 
-func uploadHandler(w http.ResponseWriter, r *http.Request, destinationDir string) {
+type SideGate struct {
+	// Directory that will be served
+	Root string
+
+	// Template for the index page
+	indexTemplate *template.Template
+}
+
+func NewSideGate(root string) (*SideGate, error) {
+	indexTemplate, err := template.New("index-page").Parse(TEMPLATE_INDEX)
+	if err != nil {
+		return nil, errors.New(fmt.Sprintf("Unable to build index page template: %v", err))
+	}
+
+	app := SideGate{
+		Root: root,
+
+		indexTemplate: indexTemplate,
+	}
+
+	return &app, nil
+}
+
+func (s SideGate) downloadHandler(w http.ResponseWriter, r *http.Request) {
+	relPath := strings.Replace(r.URL.Path, "/download", "", 1)
+	relPath = strings.TrimLeft(relPath, "/")
+
+	var fullPath strings.Builder
+	fullPath.WriteString(s.Root)
+	fullPath.WriteRune(os.PathSeparator)
+	fullPath.WriteString(relPath)
+
+	http.ServeFile(w, r, fullPath.String())
+}
+
+func (s SideGate) uploadHandler(w http.ResponseWriter, r *http.Request) {
 	r.ParseMultipartForm(1024 * 1024 * 10)
 
 	fin, header, err := r.FormFile("file")
@@ -94,9 +134,16 @@ func uploadHandler(w http.ResponseWriter, r *http.Request, destinationDir string
 	name := header.Filename
 
 	// Create upload destination
+	relPath := strings.Replace(r.URL.Path, "/upload", "", 1)
+	relPath = strings.TrimLeft(relPath, "/")
+
 	var outputFile strings.Builder
-	outputFile.WriteString(destinationDir)
-	outputFile.WriteString("/")
+	outputFile.WriteString(s.Root)
+	outputFile.WriteRune(os.PathSeparator)
+	if relPath != "" {
+		outputFile.WriteString(relPath)
+		outputFile.WriteRune(os.PathSeparator)
+	}
 	outputFile.WriteString(name)
 
 	filePath := outputFile.String()
@@ -119,25 +166,55 @@ func uploadHandler(w http.ResponseWriter, r *http.Request, destinationDir string
 
 	log.Printf("File uploaded to: %s (%s)", filePath, humanizeFileSize(bytes))
 
-	http.Redirect(w, r, "/", http.StatusFound)
+	// Redirect back to the directory index
+	var redirectPath strings.Builder
+	redirectPath.WriteString("/browse/")
+	redirectPath.WriteString(relPath)
+	http.Redirect(w, r, redirectPath.String(), http.StatusFound)
 }
 
 type Node struct {
-	Name  string
-	Size  string
+	// The base name of the file
+	Name string
+
+	// Is it a directory?
 	IsDir bool
+
+	// Human-readable file size
+	Size string
+
+	// The path to the file, relative to the root directory.
+	RelPath string
 }
 
-type HomeDir struct {
-	ServePath string
-	Items     []Node
+type Directory struct {
+	// The current path being served, relative to the root directory.
+	CurrentPath string
+
+	// Path being served by this request, with the root directory removed, and
+	// each folder as a separate item in the array.
+	// E.g. If we're serving /tmp, and the path being served is /tmp/foo/bar,
+	// then CurrentPath will be: []string{"foo", "bar"}
+	// This is used to show the path context, for friendlier browsing.
+	PathParts []string
+
+	// Files/directories and the metadata needed for rendering
+	Items []Node
 }
 
-func indexHandler(w http.ResponseWriter, r *http.Request, destDir string, t *template.Template) {
-	dirObjects, err := ioutil.ReadDir(destDir)
+func (s SideGate) indexHandler(w http.ResponseWriter, r *http.Request) {
+	relPath := strings.Replace(r.URL.Path, "/browse", "", 1)
+	relPath = strings.TrimLeft(relPath, "/")
+
+	var fullPath strings.Builder
+	fullPath.WriteString(s.Root)
+	fullPath.WriteRune(os.PathSeparator)
+	fullPath.WriteString(relPath)
+
+	dirObjects, err := ioutil.ReadDir(fullPath.String())
 	if err != nil {
-		log.Printf("Unable to read contents of directory %s: %v", destDir, err)
-		t.Execute(w, nil)
+		log.Printf("Unable to read contents of directory %s: %v", fullPath.String(), err)
+		s.indexTemplate.Execute(w, nil)
 		return
 	}
 
@@ -151,16 +228,25 @@ func indexHandler(w http.ResponseWriter, r *http.Request, destDir string, t *tem
 			fileSize = humanizeFileSize(obj.Size())
 		}
 
+		var fileRelPath strings.Builder
+		if relPath != "" {
+			fileRelPath.WriteString(relPath)
+			fileRelPath.WriteRune(os.PathSeparator)
+		}
+		fileRelPath.WriteString(obj.Name())
+
 		dirContents[i] = Node{
-			Name:  obj.Name(),
-			Size:  fileSize,
-			IsDir: obj.IsDir(),
+			Name:    obj.Name(),
+			Size:    fileSize,
+			IsDir:   obj.IsDir(),
+			RelPath: fileRelPath.String(),
 		}
 	}
 
-	t.Execute(w, HomeDir{
-		ServePath: destDir,
-		Items:     dirContents,
+	s.indexTemplate.Execute(w, Directory{
+		CurrentPath: relPath,
+		PathParts:   strings.Split(relPath, "/"),
+		Items:       dirContents,
 	})
 }
 
@@ -180,20 +266,19 @@ func main() {
 	listenAddrStr.WriteString(strconv.Itoa(*listenPort))
 	listenAddress := listenAddrStr.String()
 
-	indexTemplate, err := template.New("index-page").Parse(TEMPLATE_INDEX)
+	app, err := NewSideGate(*destinationDir)
 	if err != nil {
-		log.Fatalf("Unable to build index page template: %v", err)
+		log.Fatalf("Unable to initialise: %v", err)
 	}
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		indexHandler(w, r, *destinationDir, indexTemplate)
+		http.Redirect(w, r, "/browse", http.StatusFound)
 	})
+	http.HandleFunc("/browse/", app.indexHandler)
+	http.HandleFunc("/upload/", app.uploadHandler)
+	http.HandleFunc("/download/", app.downloadHandler)
 
-	http.HandleFunc("/upload", func(w http.ResponseWriter, r *http.Request) {
-		uploadHandler(w, r, *destinationDir)
-	})
-
-	log.Printf("Saving uploads to %s", *destinationDir)
+	log.Printf("Saving uploads to %s", app.Root)
 	log.Printf("Listening on %s", listenAddress)
 
 	log.Fatal(http.ListenAndServe(listenAddress, nil))
