@@ -8,6 +8,7 @@ import (
 	"io/ioutil"
 	"log"
 	"math"
+	"net"
 	"net/http"
 	"os"
 	"sort"
@@ -287,8 +288,57 @@ func (s SideGate) OpenTheGate() error {
 		Handler: mux,
 	}
 
-	log.Printf("Saving uploads to %s", s.Root)
-	log.Printf("Listening on %s", listenAddress)
+	log.Printf("Serving local directory %s", s.Root)
+
+	// Best-effort attempt to get the local IP address, which can be used to
+	// share directly with the person with whom we are sharing files.
+	//
+	// If we're unable to get any IP addresses from the local network
+	// interfaces at all, we don't hold up the start-up of the system; we just
+	// ignore and move on and let the user figure it out instead.
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		log.Printf("Unable to get local network interfaces. Ignoring.", err)
+		ifaces = []net.Interface{}
+	}
+
+	localIpFound := false
+	for _, i := range ifaces {
+		addrs, err := i.Addrs()
+
+		if err != nil {
+			log.Printf("Unable to get addresses from local interface %w. Ignoring.", i)
+			continue
+		}
+
+		for _, addr := range addrs {
+			var ip net.IP
+
+			switch v := addr.(type) {
+			case *net.IPNet:
+				ip = v.IP
+			case *net.IPAddr:
+				ip = v.IP
+			}
+
+			// There's a ton of interfaces that we're not interested in, so we
+			// do our best to find the local IP address that's not a loopback
+			// or multicast or unicast IP.
+			if !ip.IsLoopback() &&
+				!ip.IsLinkLocalUnicast() &&
+				!ip.IsLinkLocalMulticast() &&
+				!ip.IsMulticast() &&
+				!ip.IsInterfaceLocalMulticast() {
+
+				log.Printf("Listening on http://%s:%d", ip, s.Port)
+				localIpFound = true
+			}
+		}
+	}
+
+	if !localIpFound {
+		log.Printf("Listening on port %d", s.Port)
+	}
 
 	return server.ListenAndServe()
 }
