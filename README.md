@@ -34,9 +34,11 @@ This is a lot more than I thought was necessary.
 The [Go toolchain](https://golang.org/) is necessary to build.
 
     $ go build
-    $ ./sidegate
+	$ ./sidegate
+    2020/03/02 09:53:43 Serving local directory /Users/ltriant/projects/github/sidegate
+    2020/03/02 09:53:43 Listening on http://10.1.18.33:8000
 
-Get your local IP address (from `ifconfig` or whatever means you prefer), have your friend browse to `http://1.2.3.4:8000` (where `1.2.3.4` is your IP address), and share away!
+The URL - which points to your local IP address - that was logged can be shared with your friends, and then amazing file sharing experiences may commence :)
 
 By default, files are served from current working directory (i.e. whichever directory you ran the server from), but this can be overridden with the `-destDir` parameter.
 
