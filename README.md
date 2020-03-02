@@ -29,21 +29,35 @@ There are other projects out there that perform this function, but, of the ones 
 
 This is a lot more than I thought was necessary.
 
-# Build and run
+# Install
+
+If you have the [Go toolchain](https://golang.org/) installed, then the `sidegate` service can be installed by:
+
+    $ go get -u github.com/ltriant/sidegate
+
+At some point I may make it installable by OS package managers to remove this dependency.
+
+# Build
 
 The [Go toolchain](https://golang.org/) is necessary to build.
 
+    $ git clone https://github.com/ltriant/sidegate.git
     $ go build
-	$ ./sidegate
+
+# Running
+
+After installing or building, it can be run without any parameters:
+
+    $ sidegate
     2020/03/02 09:53:43 Serving local directory /Users/ltriant/projects/github/sidegate
     2020/03/02 09:53:43 Listening on http://10.1.18.33:8000
 
-The URL - which points to your local IP address - that was logged can be shared with your friends, and then amazing file sharing experiences may commence :)
+The logged URL - which points to your IP address on your local network - can be shared with your friends, and then amazing file-sharing experiences may commence :)
 
 By default, files are served from current working directory (i.e. whichever directory you ran the server from), but this can be overridden with the `-destDir` parameter.
 
 Also by default, the server listens on port 8000, but can be overridden by the `-port` parameter.
 
-    $ ./sidegate -destDir /tmp -port 1234
+    $ sidegate -destDir /tmp -port 1234
 
 This was intended to be run on a local network only and _not_ the public-facing internet, so there's no SSL.
