@@ -251,15 +251,16 @@ func (s SideGate) indexHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	sort.Slice(dirContents, func(i, j int) bool {
+		// Sort directories to the top
 		if dirContents[i].IsDir && !dirContents[j].IsDir {
 			return true
-		}
-
-		if dirContents[i].IsDir && dirContents[j].IsDir {
+		} else if !dirContents[i].IsDir && dirContents[j].IsDir {
+			return false
+		} else {
+			// In this case, we're comparing either two directories
+			// or two files.
 			return dirContents[i].Name < dirContents[j].Name
 		}
-
-		return false
 	})
 
 	s.indexTemplate.Execute(w, Directory{
