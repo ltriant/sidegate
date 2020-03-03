@@ -97,12 +97,23 @@ type SideGate struct {
 
 	// Template for the index page
 	indexTemplate *template.Template
+
+	// The basename of the root directory
+	rootBasename string
 }
 
 func NewSideGate(root string, listenPort int) (*SideGate, error) {
 	indexTemplate, err := template.New("index-page").Parse(TEMPLATE_INDEX)
 	if err != nil {
-		return nil, fmt.Errorf("Unable to build index page template: %w", err)
+		return nil, fmt.Errorf("Unable to build index page template: %s", err.Error())
+	}
+
+	var rootBasename string
+	basename := strings.Split(root, "/")
+	if len(basename) > 0 {
+		rootBasename = basename[len(basename)-1]
+	} else {
+		rootBasename = ""
 	}
 
 	app := SideGate{
@@ -110,6 +121,7 @@ func NewSideGate(root string, listenPort int) (*SideGate, error) {
 		Port: listenPort,
 
 		indexTemplate: indexTemplate,
+		rootBasename:  rootBasename,
 	}
 
 	return &app, nil
@@ -133,7 +145,8 @@ func (s SideGate) uploadHandler(w http.ResponseWriter, r *http.Request) {
 	fin, header, err := r.FormFile("file")
 	if err != nil {
 		log.Printf("Unable to get `file` parameter: %w", err)
-		http.Error(w, "Unable to get file data from request", http.StatusInternalServerError)
+		http.Error(w, "Unable to get file data from request",
+			http.StatusInternalServerError)
 		return
 	}
 	defer fin.Close()
@@ -158,7 +171,8 @@ func (s SideGate) uploadHandler(w http.ResponseWriter, r *http.Request) {
 	fout, err := os.Create(filePath)
 	if err != nil {
 		log.Printf("Unable to create file %s: %w", filePath, err)
-		http.Error(w, "Unable to create file on disk", http.StatusInternalServerError)
+		http.Error(w, "Unable to create file on disk",
+			http.StatusInternalServerError)
 		return
 	}
 	defer fout.Close()
@@ -198,10 +212,10 @@ type Directory struct {
 	// The current path being served, relative to the root directory.
 	CurrentPath string
 
-	// Path being served by this request, with the root directory removed, and
-	// each folder as a separate item in the array.
-	// E.g. If we're serving /tmp, and the path being served is /tmp/foo/bar,
-	// then CurrentPath will be: []string{"foo", "bar"}
+	// Path being served by this request, with the root directory removed,
+	// and each folder as a separate item in the array.
+	// E.g. If we're serving /tmp, and the path being served is
+	// /tmp/foo/bar, then CurrentPath will be: []string{"foo", "bar"}
 	// This is used to show the path context, for friendlier browsing.
 	PathParts []string
 
@@ -220,7 +234,8 @@ func (s SideGate) indexHandler(w http.ResponseWriter, r *http.Request) {
 
 	dirObjects, err := ioutil.ReadDir(fullPath.String())
 	if err != nil {
-		log.Printf("Unable to read contents of directory %s: %w", fullPath.String(), err)
+		log.Printf("Unable to read contents of directory %s: %s",
+			fullPath.String(), err.Error())
 		s.indexTemplate.Execute(w, nil)
 		return
 	}
@@ -263,9 +278,14 @@ func (s SideGate) indexHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	})
 
+	pathParts := []string{s.rootBasename}
+	if parts := strings.Split(relPath, "/"); len(parts) > 0 && parts[0] != "" {
+		pathParts = append(pathParts, parts...)
+	}
+
 	s.indexTemplate.Execute(w, Directory{
 		CurrentPath: relPath,
-		PathParts:   strings.Split(relPath, "/"),
+		PathParts:   pathParts,
 		Items:       dirContents,
 	})
 }
@@ -295,11 +315,12 @@ func (s SideGate) OpenTheGate() error {
 	// share directly with the person with whom we are sharing files.
 	//
 	// If we're unable to get any IP addresses from the local network
-	// interfaces at all, we don't hold up the start-up of the system; we just
-	// ignore and move on and let the user figure it out instead.
+	// interfaces at all, we don't hold up the start-up of the system; we
+	// just ignore and move on and let the user figure it out instead.
 	ifaces, err := net.Interfaces()
 	if err != nil {
-		log.Printf("Unable to get local network interfaces. Ignoring.", err)
+		log.Printf("Unable to get local network interfaces: %s. Ignoring.",
+			err.Error())
 		ifaces = []net.Interface{}
 	}
 
