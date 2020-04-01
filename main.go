@@ -33,8 +33,12 @@ const TEMPLATE_INDEX string = `<!DOCTYPE html>
 				font-weight: 400;
 				font-size: 12pt;
 				color: #202020;
-
-				padding: 0.5em 1em;
+			}
+			@media (min-width: 850px) {
+				body {
+					margin: 0 auto;
+					padding: 0.5em 1em;
+				}
 			}
 			h1 { font-size: 14pt; font-weight: 700; }
 			h2 { font-size: 12pt; font-weight: 700; font-family: monospace; }
@@ -44,6 +48,8 @@ const TEMPLATE_INDEX string = `<!DOCTYPE html>
 			a:visited { color: #67ce2c; }
 			a:hover   { color: #97ee4c; text-decoration: none; }
 		</style>
+
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 	</head>
 	<body>
 		<h1>Upload a File</h1>
