@@ -54,7 +54,7 @@ const TEMPLATE_INDEX string = `<!DOCTYPE html>
 	<body>
 		<h1>Upload a File</h1>
 		<form action="/upload/{{.CurrentPath}}" method="POST" enctype="multipart/form-data">
-			<div><input type="file" name="file"></div>
+			<div><input type="file" name="file" multiple></div>
 			<div><input type="submit" value="Upload"></div>
 		</form>
 
@@ -148,50 +148,59 @@ func (s SideGate) downloadHandler(w http.ResponseWriter, r *http.Request) {
 func (s SideGate) uploadHandler(w http.ResponseWriter, r *http.Request) {
 	r.ParseMultipartForm(1024 * 1024 * 10)
 
-	fin, header, err := r.FormFile("file")
-	if err != nil {
-		log.Printf("Unable to get `file` parameter: %w", err)
-		http.Error(w, "Unable to get file data from request",
-			http.StatusInternalServerError)
-		return
-	}
-	defer fin.Close()
-
-	name := header.Filename
-
-	// Create upload destination
+	// The base path on the filesystem for the file upload(s)
 	relPath := strings.Replace(r.URL.Path, "/upload", "", 1)
 	relPath = strings.TrimLeft(relPath, "/")
 
-	var outputFile strings.Builder
-	outputFile.WriteString(s.Root)
-	outputFile.WriteRune(os.PathSeparator)
+	var outputFileBase strings.Builder
+	outputFileBase.WriteString(s.Root)
+	outputFileBase.WriteRune(os.PathSeparator)
 	if relPath != "" {
-		outputFile.WriteString(relPath)
-		outputFile.WriteRune(os.PathSeparator)
-	}
-	outputFile.WriteString(name)
-
-	filePath := outputFile.String()
-
-	fout, err := os.Create(filePath)
-	if err != nil {
-		log.Printf("Unable to create file %s: %w", filePath, err)
-		http.Error(w, "Unable to create file on disk",
-			http.StatusInternalServerError)
-		return
-	}
-	defer fout.Close()
-
-	// Stream file to disk
-	bytes, err := io.Copy(fout, fin)
-	if err != nil {
-		log.Printf("Failed to save file to path %s: %w", filePath, err)
-		http.Error(w, "Unable to save file", http.StatusInternalServerError)
-		return
+		outputFileBase.WriteString(relPath)
+		outputFileBase.WriteRune(os.PathSeparator)
 	}
 
-	log.Printf("File uploaded to: %s (%s)", filePath, humanizeFileSize(bytes))
+	m := r.MultipartForm
+	files := m.File["file"]
+
+	for i, _ := range files {
+		fin, err := files[i].Open()
+
+		if err != nil {
+			log.Printf("Unable to get handle to submitted file: %w", err)
+			http.Error(w, "Unable to get file data from request",
+				http.StatusInternalServerError)
+			return
+		}
+
+		defer fin.Close()
+
+		name := files[i].Filename
+
+		var outputFile strings.Builder
+		outputFile.WriteString(outputFileBase.String())
+		outputFile.WriteString(name)
+		filePath := outputFile.String()
+
+		fout, err := os.Create(filePath)
+		if err != nil {
+			log.Printf("Unable to create file %s: %w", filePath, err)
+			http.Error(w, "Unable to create file on disk",
+				http.StatusInternalServerError)
+			return
+		}
+		defer fout.Close()
+
+		// Stream file to disk
+		bytes, err := io.Copy(fout, fin)
+		if err != nil {
+			log.Printf("Failed to save file to path %s: %w", filePath, err)
+			http.Error(w, "Unable to save file", http.StatusInternalServerError)
+			return
+		}
+
+		log.Printf("File uploaded to: %s (%s)", filePath, humanizeFileSize(bytes))
+	}
 
 	// Redirect back to the directory index
 	var redirectPath strings.Builder
