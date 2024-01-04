@@ -11,9 +11,11 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"os/signal"
 	"sort"
 	"strconv"
 	"strings"
+	"syscall"
 )
 
 const DEFAULT_LISTEN_PORT int = 8000
@@ -381,6 +383,7 @@ func (s SideGate) OpenTheGate() error {
 }
 
 func main() {
+	log.SetOutput(os.Stdout)
 	cwd, err := os.Getwd()
 
 	if err != nil {
@@ -395,6 +398,17 @@ func main() {
 	if err != nil {
 		log.Fatalf("Unable to initialise: %w", err)
 	}
+
+	signalChan := make(chan os.Signal, 1)
+	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)
+
+	go func() {
+		select {
+		case sig := <-signalChan:
+			log.Printf("Got signal %s, exiting.", sig.String())
+			os.Exit(1)
+		}
+	}()
 
 	app.OpenTheGate()
 }
