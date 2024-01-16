@@ -1,3 +1,44 @@
+//                       _     _                  _
+//                      (_)   | |                | |
+//                   ___ _  __| | ___  __ _  __ _| |_ ___
+//                  / __| |/ _` |/ _ \/ _` |/ _` | __/ _ \
+//                  \__ \ | (_| |  __/ (_| | (_| | ||  __/
+//                  |___/_|\__,_|\___|\__, |\__,_|\__\___|
+//                                     __/ |
+//                                    |___/
+//
+//   Share files with friends by leaving the sidegate open... or something
+//
+//
+//                                   {} {}
+//                             !  !  II II  !  !
+//                          !  I__I__II II__I__I  !
+//                          I_/|--|--|| ||--|--|\_I
+//         .-'"'-.       ! /|_/|  |  || ||  |  |\_|\ !       .-'"'-.
+//        /===    \      I//|  |  |  || ||  |  |  |\\I      /===    \
+//        \==     /   ! /|/ |  |  |  || ||  |  |  | \|\ !   \==     /
+//         \__  _/    I//|  |  |  |  || ||  |  |  |  |\\I    \__  _/
+//          _} {_  ! /|/ |  |  |  |  || ||  |  |  |  | \|\ !  _} {_
+//         {_____} I//|  |  |  |  |  || ||  |  |  |  |  |\\I {_____}
+//    !  !  |=  |=/|/ |  |  |  |  |  || ||  |  |  |  |  | \|\=|-  |  !  !
+//   _I__I__|=  ||/|  |  |  |  |  |  || ||  |  |  |  |  |  |\||   |__I__I_
+//   -|--|--|-  || |  |  |  |  |  |  || ||  |  |  |  |  |  | ||=  |--|--|-
+//   _|__|__|   ||_|__|__|__|__|__|__|| ||__|__|__|__|__|__|_||-  |__|__|_
+//   -|--|--|   ||-|--|--|--|--|--|--|| ||--|--|--|--|--|--|-||   |--|--|-
+//    |  |  |=  || |  |  |  |  |  |  || ||  |  |  |  |  |  | ||   |  |  |
+//    |  |  |   || |  |  |  |  |  |  || ||  |  |  |  |  |  | ||=  |  |  |
+//    |  |  |-  || |  |  |  |  |  |  || ||  |  |  |  |  |  | ||   |  |  |
+//    |  |  |   || |  |  |  |  |  |  || ||  |  |  |  |  |  | ||=  |  |  |
+//    |  |  |=  || |  |  |  |  |  |  || ||  |  |  |  |  |  | ||   |  |  |
+//    |  |  |   || |  |  |  |  |  |  || ||  |  |  |  |  |  | ||   |  |  |
+//    |  |  |   || |  |  |  |  |  |  || ||  |  |  |  |  |  | ||-  |  |  |
+//   _|__|__|   || |  |  |  |  |  |  || ||  |  |  |  |  |  | ||=  |__|__|_
+//   -|--|--|=  || |  |  |  |  |  |  || ||  |  |  |  |  |  | ||   |--|--|-
+//   _|__|__|   ||_|__|__|__|__|__|__|| ||__|__|__|__|__|__|_||-  |__|__|_
+//   -|--|--|=  ||-|--|--|--|--|--|--|| ||--|--|--|--|--|--|-||=  |--|--|-
+//   jgs |  |-  || |  |  |  |  |  |  || ||  |  |  |  |  |  | ||-  |  |  |
+//  ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^~~~~~~~~~~~
+
 package main
 
 import (
@@ -5,6 +46,7 @@ import (
 	"fmt"
 	"html/template"
 	"io"
+	"io/fs"
 	"io/ioutil"
 	"log"
 	"math"
@@ -96,6 +138,21 @@ func humanizeFileSize(size int64) string {
 	return fmt.Sprintf("%0.1f %s", realSize, suffixes[order])
 }
 
+func fileIsReadable(fullPath string) bool {
+	info, err := os.Lstat(fullPath)
+	if err != nil {
+		log.Printf("Unable to lstat %s: %s", fullPath, err)
+		return false
+	}
+
+	// Only serve files that are world-readable.
+	if (info.Mode() & fs.ModePerm & 0o004) == 0 {
+		return false
+	}
+
+	return true
+}
+
 type SideGate struct {
 	// Directory that will be served
 	Root string
@@ -143,6 +200,11 @@ func (s SideGate) downloadHandler(w http.ResponseWriter, r *http.Request) {
 	fullPath.WriteString(s.Root)
 	fullPath.WriteRune(os.PathSeparator)
 	fullPath.WriteString(relPath)
+
+	if !fileIsReadable(fullPath.String()) {
+		http.Error(w, "File is not readable", http.StatusInternalServerError)
+		return
+	}
 
 	http.ServeFile(w, r, fullPath.String())
 }
@@ -232,7 +294,7 @@ type Directory struct {
 	// Path being served by this request, with the root directory removed,
 	// and each folder as a separate item in the array.
 	// E.g. If we're serving /tmp, and the path being served is
-	// /tmp/foo/bar, then CurrentPath will be: []string{"foo", "bar"}
+	// /tmp/foo/bar, then PathParts will be: []string{"foo", "bar"}
 	// This is used to show the path context, for friendlier browsing.
 	PathParts []string
 
@@ -246,8 +308,11 @@ func (s SideGate) indexHandler(w http.ResponseWriter, r *http.Request) {
 
 	var fullPath strings.Builder
 	fullPath.WriteString(s.Root)
-	fullPath.WriteRune(os.PathSeparator)
-	fullPath.WriteString(relPath)
+
+	if relPath != "" {
+		fullPath.WriteRune(os.PathSeparator)
+		fullPath.WriteString(relPath)
+	}
 
 	dirObjects, err := ioutil.ReadDir(fullPath.String())
 	if err != nil {
@@ -260,6 +325,15 @@ func (s SideGate) indexHandler(w http.ResponseWriter, r *http.Request) {
 	numObjects := len(dirObjects)
 	dirContents := make([]Node, numObjects)
 	for i, obj := range dirObjects {
+		var absolutePath strings.Builder
+		absolutePath.WriteString(fullPath.String())
+		absolutePath.WriteRune(os.PathSeparator)
+		absolutePath.WriteString(obj.Name())
+
+		if !fileIsReadable(absolutePath.String()) {
+			continue
+		}
+
 		var fileSize string
 		if obj.IsDir() {
 			fileSize = ""
@@ -390,11 +464,11 @@ func main() {
 		log.Fatalf("Unable to get current working directory: %w", err)
 	}
 
-	destinationDir := flag.String("destDir", cwd, "destination folder")
-	listenPort := flag.Int("port", DEFAULT_LISTEN_PORT, "port to serve HTTP endpoint")
+	servedDir := flag.String("dir", cwd, "folder to serve")
+	listenPort := flag.Int("port", DEFAULT_LISTEN_PORT, "port to serve the HTTP endpoint")
 	flag.Parse()
 
-	app, err := NewSideGate(*destinationDir, *listenPort)
+	app, err := NewSideGate(*servedDir, *listenPort)
 	if err != nil {
 		log.Fatalf("Unable to initialise: %w", err)
 	}
