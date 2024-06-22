@@ -8,10 +8,6 @@ Share files with friends :)
 2. Files can be downloaded from any of the served directories
 3. Files can be uploaded into any of the served directories
 
-# What else does it do?
-
-1. It won't serve any files or folders that aren't world-readable.
-
 # Why?
 
 On several occasions my friends and I have wanted to share large files with each other, but we have run into at least one of the following issues:
@@ -21,14 +17,14 @@ On several occasions my friends and I have wanted to share large files with each
 3. The files can be uploaded to a cloud file hosting provider, and then downloaded, but this seems wasteful of bandwidth when we're connected to the same local network and sitting a few feet from each other
 4. The friend's laptop can't run a simple fileserver (like Python's SimpleHTTPServer), because perhaps they don't have enough privileges
 
-All of this is ridiculous, so I wrote this dirt-simple program that I can run on my laptop, and then any of my friends with a web browser can either upload files to or download files from my laptop, without us needing to work around these silly problems.
+All of this is a bit ridiculous, so I wrote this simple program that I can run on my laptop, and then any of my friends with a web browser can either upload files to or download files from my laptop, without us needing to work around these silly problems.
 
 # Why not any of the other projects?
 
 There are other projects out there that perform this function, but, of the ones that I saw, I don't like them because:
 
 1. They're often written in Python with third-party dependencies, and I just want a static binary that's easy to compile with no external dependencies or runtimes necessary, that I can also cross-compile for other platforms and share with less technical friends if they want to use this for themselves
-2. Worse still, some projects require Apache or nginx, because they're CGI or PHP scripts
+2. Some projects require Apache or nginx, because they're CGI or PHP scripts
 3. They have a ton of extra features that I'm not interested in, e.g. user accounts and groups of users — i.e. a database dependency — in-browser file viewers, and tons of JavaScript and CSS effects
 
 This is a lot more than I thought was necessary.
@@ -39,7 +35,7 @@ I wanted something approachable, simple, and portable.
 
 If you have the [Go toolchain](https://golang.org/) installed, then the system can be installed by:
 
-    $ go get -u github.com/ltriant/sidegate
+    $ go install github.com/ltriant/sidegate@latest
 
 It will be installed into you Go path's `bin` directory...
 
